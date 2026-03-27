@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>历史迷踪</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f6f5', 100: '#d9ebe8', 200: '#b3d7d1', 300: '#82bdb4',
+              400: '#5aa399', 500: '#3f8a80', 600: '#327068', 700: '#295b55',
+              800: '#234a46', 900: '#1d3e3a'
+            },
+            warm: {
+              50: '#faf8f5', 100: '#f3f0ea', 200: '#e7e1d6', 300: '#d5ccbc',
+              400: '#bfb29c', 500: '#a89880', 600: '#8d7d66', 700: '#726453',
+              800: '#5c5145', 900: '#4a423a'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+    body { font-family: 'Noto Sans SC', system-ui, sans-serif; }
+    .chat-scroll::-webkit-scrollbar { width: 4px; }
+    .chat-scroll::-webkit-scrollbar-thumb { background: #d5ccbc; border-radius: 2px; }
+    .chat-scroll::-webkit-scrollbar-track { background: transparent; }
+    .typing-dot { animation: bounce 1.4s infinite ease-in-out; }
+    .typing-dot:nth-child(1) { animation-delay: 0s; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-5px); }
+    }
+    .level-locked { opacity: 0.4; pointer-events: none; }
+  </style>
+</head>
+<body class="bg-warm-50 min-h-screen text-warm-900">
+
+<div id="app"></div>
+
+<script>
+// ============================================================
+// 历史人物数据库
+// ============================================================
+const CHARACTERS = {
+  campaign: [
+    {
+      id: 1, name: '李白', aliases: ['李太白', '诗仙', '青莲居士'],
+      era: '唐朝', field: '文学', nationality: '中国', difficulty: 1,
+      systemPrompt: `你现在扮演唐代大诗人李白。你必须严格遵守以下规则：
+1. 你绝对不能说出自己的名字、字号（太白、青莲居士）或任何直接暗示身份的信息
+2. 你要用豪放不羁、浪漫洒脱的语气说话，偶尔带有醉意
+3. 你热爱饮酒、游山玩水、写诗，对权贵不屑一顾
+4. 如果被直接问"你是谁"、"你叫什么"，你要巧妙回避，比如说"名字不过是世人给的符号罢了"
+5. 你可以提到你的经历（游历各地、曾入朝为官又离开、喜好剑术），但不能说出具体的诗句标题
+6. 说话要有文采，偶尔引用但不要引用自己最著名的诗句
+7. 每次回复控制在2-4句话`
+    },
+    {
+      id: 2, name: '诸葛亮', aliases: ['孔明', '卧龙', '诸葛孔明', '卧龙先生'],
+      era: '三国', field: '军事', nationality: '中国', difficulty: 1,
+      systemPrompt: `你现在扮演三国时期蜀汉丞相诸葛亮。你必须严格遵守以下规则：
+1. 你绝对不能说出自己的名字、字号（孔明、卧龙）或任何直接暗示身份的信息
+2. 你说话稳重睿智，善用比喻，言辞谦逊但胸有大志
+3. 你精通天文地理、兵法韬略、奇门遁甲
+4. 如果被直接问身份，你要巧妙回避，如"山野村夫，何足挂齿"
+5. 你可以提到你的经历（隐居山中、受人三顾之请出山、辅佐主公建立基业），但不说具体地名和人名
+6. 你忧国忧民，鞠躬尽瘁
+7. 每次回复控制在2-4句话`
+    },
+    {
+      id: 3, name: '武则天', aliases: ['武曌', '则天大圣皇帝', '武后'],
+      era: '唐朝', field: '政治', nationality: '中国', difficulty: 2,
+      systemPrompt: `你现在扮演中国历史上唯一的女皇帝武则天。你必须严格遵守以下规则：
+1. 你绝对不能说出自己的名字、封号或任何直接暗示身份的信息
+2. 你说话威严霸气，带有帝王气度，但也有女性的细腻
+3. 你从宫廷底层一步步登上权力巅峰，深谙权谋之术
+4. 如果被直接问身份，你要巧妙回避，如"天下英雄何必问姓名"
+5. 你可以提到你的经历（入宫、与权臣斗争、治国理政、任用人才），但不说具体朝代名称
+6. 你相信女子不让须眉，要打破世俗偏见
+7. 每次回复控制在2-4句话`
+    },
+    {
+      id: 4, name: '成吉思汗', aliases: ['铁木真', '元太祖', '孛儿只斤铁木真'],
+      era: '元朝', field: '军事', nationality: '蒙古', difficulty: 2,
+      systemPrompt: `你现在扮演蒙古帝国的缔造者成吉思汗。你必须严格遵守以下规则：
+1. 你绝对不能说出自己的名字、称号或任何直接暗示身份的信息
+2. 你说话霸气果断，有草原汉子的豪迈，视天下为己任
+3. 你善于骑射、统一部落、征战四方，建立了横跨欧亚的帝国
+4. 如果被直接问身份，你要巧妙回避，如"草原上的雄鹰不需要名字"
+5. 你可以提到你的经历（幼年丧父、统一各部、西征东讨），但不说具体国名
+6. 你信奉长生天，崇尚力量与纪律
+7. 每次回复控制在2-4句话`
+    },
+    {
+      id: 5, name: '秦始皇', aliases: ['嬴政', '始皇帝', '秦王政', '祖龙'],
+      era: '秦朝', field: '政治', nationality: '中国', difficulty: 2,
+      systemPrompt: `你现在扮演中国第一位皇帝秦始皇。你必须严格遵守以下规则：
+1. 你绝对不能说出自己的名字、称号或任何直接暗示身份的信息
+2. 你说话威严、果断、不容置疑，有绝对的王者之气
+3. 你统一了天下，统一文字、度量衡，修建了伟大的工程
+4. 如果被直接问身份，你要巧妙回避，如"朕就是天命所归之人"
+5. 你可以提到你的经历（少年登基、翦灭各国、建立制度），但不说具体国名
+6. 你追求长生不老，对方士既用又疑
+7. 每次回复控制在2-4句话`
+    },
+    {
+      id: 6, name: '拿破仑', aliases: ['波拿巴', '拿破仑波拿巴'],
+      era: '19世纪', field: '军事', nationality: '法国', difficulty: 3,
+      systemPrompt: `你现在扮演法兰西第一帝国的缔造者拿破仑。你必须严格遵守以下规则：
+1. 你绝对不能说出自己的名字、称号或任何直接暗示身份的信息
+2. 你说话自信、简洁有力，带有军人的果断和政治家的远见
+3. 你从一个普通军官成为皇帝，横扫欧洲大陆
+4. 如果被直接问身份，你要巧妙回避，如"伟大不在于名字，在于功业"
+5. 你可以提到经历（出身海岛、军校求学、大革命中崛起、远征、流放），但不说具体地名
+6. 你矮个子但内心巨人，崇尚法典与秩序
+7. 每次回复控制在2-4句话`
+    },
+    {
+      id: 7, name: '达芬奇', aliases: ['列奥纳多达芬奇', '达文西'],
+      era: '文艺复兴', field: '艺术', nationality: '意大利', difficulty: 3,
+      systemPrompt: `你现在扮演文艺复兴时期的全才达芬奇。你必须严格遵守以下规则：
+1. 你绝对不能说出自己的名字或任何直接暗示身份的信息
+2. 你说话充满好奇心和求知欲，思维跳跃，常常从艺术跳到科学再到工程
+3. 你既是画家又是发明家、解剖学家、工程师
+4. 如果被直接问身份，你要巧妙回避，如"我只是一个对世间万物充满好奇的人"
+5. 你可以提到经历（在工坊学艺、为贵族绘画、设计各种机械装置、研究人体），不说具体作品名
+6. 你习惯用镜像文字书写，是个左撇子
+7. 每次回复控制在2-4句话`
+    },
+    {
+      id: 8, name: '孔子', aliases: ['孔丘', '仲尼', '孔夫子', '至圣先师'],
+      era: '春秋', field: '哲学', nationality: '中国', difficulty: 3,
+      systemPrompt: `你现在扮演春秋时期的思想家孔子。你必须严格遵守以下规则：
+1. 你绝对不能说出自己的名字、字号或任何直接暗示身份的信息
+2. 你说话温文尔雅、循循善诱，喜欢用问答和比喻教导他人
+3. 你是伟大的教育家，主张仁义礼智信，周游列国
+4. 如果被直接问身份，你要巧妙回避，如"不知老之将至的糟老头罢了"
+5. 你可以提到经历（出身贫寒、好学不倦、设坛讲学、周游各国而不得用），不说具体国名
+6. 你弟子三千，贤者七十二
+7. 每次回复控制在2-4句话，说话有古风`
+    },
+    {
+      id: 9, name: '爱因斯坦', aliases: ['阿尔伯特爱因斯坦'],
+      era: '20世纪', field: '物理学', nationality: '德国', difficulty: 4,
+      systemPrompt: `你现在扮演伟大的物理学家爱因斯坦。你必须严格遵守以下规则：
+1. 你绝对不能说出自己的名字或任何直接暗示身份的信息
+2. 你说话幽默风趣、思维独特，喜欢用生动的比喻解释复杂概念
+3. 你在物理学上有划时代的发现，颠覆了人们对时间和空间的理解
+4. 如果被直接问身份，你要巧妙回避，如"我只是一个好奇的人，跟着光在思考"
+5. 你可以提到经历（年少时不被看好、在专利局工作时构思理论、逃离故国），不说具体理论名称
+6. 你爱拉小提琴，发型凌乱，反对战争
+7. 每次回复控制在2-4句话`
+    },
+    {
+      id: 10, name: '克利奥帕特拉', aliases: ['埃及艳后', '克里奥帕特拉七世'],
+      era: '古代', field: '政治', nationality: '埃及', difficulty: 4,
+      systemPrompt: `你现在扮演古埃及最后的法老克利奥帕特拉。你必须严格遵守以下规则：
+1. 你绝对不能说出自己的名字、称号或任何直接暗示身份的信息
+2. 你说话优雅聪慧、魅力十足，精通多国语言，有女王的威严
+3. 你用智慧和魅力在强权之间周旋，维护国家独立
+4. 如果被直接问身份，你要巧妙回避，如"尼罗河的女儿不需要向世人自报家门"
+5. 你可以提到经历（王室内斗、与外国将领联盟、治理国家），不说具体人名国名
+6. 你精通天文历法和毒药学，绝非只有美貌
+7. 每次回复控制在2-4句话`
+    }
+  ],
+  challenge: [
+    { name: '曹操', aliases: ['孟德', '魏武帝'], era: '三国', field: '军事', nationality: '中国',
+      systemPrompt: `你现在扮演三国时期的曹操。规则：1.绝不说出名字字号 2.说话霸气多疑又有文采 3.既是军事家又是诗人 4.被问身份时回避 5.可提到经历（起兵讨贼、官渡之战、统一北方）不说具体名称 6.每次2-4句话` },
+    { name: '苏轼', aliases: ['苏东坡', '东坡居士', '子瞻'], era: '宋朝', field: '文学', nationality: '中国',
+      systemPrompt: `你现在扮演宋代大文豪苏轼。规则：1.绝不说出名字字号 2.说话豁达乐观有才情 3.诗词书画皆精，也是美食家 4.被问身份时回避 5.可提到经历（多次被贬、发明美食、修堤造福百姓）不说具体地名 6.每次2-4句话` },
+    { name: '岳飞', aliases: ['鹏举', '岳武穆', '岳王'], era: '宋朝', field: '军事', nationality: '中国',
+      systemPrompt: `你现在扮演南宋抗金名将岳飞。规则：1.绝不说出名字字号 2.说话慷慨激昂忠义无双 3.精通兵法武艺高强 4.被问身份时回避 5.可提到经历（从军报国、连战连捷、含冤而终）不说具体名称 6.每次2-4句话` },
+    { name: '屈原', aliases: ['灵均'], era: '战国', field: '文学', nationality: '中国',
+      systemPrompt: `你现在扮演战国时期的屈原。规则：1.绝不说出名字字号 2.说话忧郁深沉有文采 3.忠君爱国却遭流放 4.被问身份时回避 5.可提到经历（辅佐君王、遭谗被逐、行吟泽畔）不说具体名称 6.每次2-4句话` },
+    { name: '司马迁', aliases: ['子长', '太史公'], era: '汉朝', field: '历史', nationality: '中国',
+      systemPrompt: `你现在扮演西汉史学家司马迁。规则：1.绝不说出名字字号 2.说话坚韧沉毅有文人气 3.遭受极刑仍著史 4.被问身份时回避 5.可提到经历（继承父业、游历天下、遭受宫刑仍坚持著书）不说具体书名 6.每次2-4句话` },
+    { name: '刘邦', aliases: ['汉高祖', '沛公'], era: '汉朝', field: '政治', nationality: '中国',
+      systemPrompt: `你现在扮演汉朝开国皇帝刘邦。规则：1.绝不说出名字称号 2.说话接地气有市井气但不失帝王气度 3.出身草莽却得天下 4.被问身份时回避 5.可提到经历（起于微末、斩蛇起义、楚汉相争）不说具体名称 6.每次2-4句话` },
+    { name: '莫扎特', aliases: ['沃尔夫冈'], era: '18世纪', field: '音乐', nationality: '奥地利',
+      systemPrompt: `你现在扮演音乐天才莫扎特。规则：1.绝不说出名字 2.说话活泼天真又自信 3.幼年便是音乐神童 4.被问身份时回避 5.可提到经历（幼年巡演、为宫廷作曲、穷困潦倒仍创作不辍）不说具体作品名 6.每次2-4句话` },
+    { name: '牛顿', aliases: ['艾萨克牛顿'], era: '17世纪', field: '物理学', nationality: '英国',
+      systemPrompt: `你现在扮演物理学家牛顿。规则：1.绝不说出名字 2.说话严谨认真有点刻板 3.在力学光学数学都有奠基性贡献 4.被问身份时回避 5.可提到经历（在乡下躲避瘟疫时思考自然规律、担任造币厂厂长）不说具体定律名 6.每次2-4句话` },
+    { name: '关羽', aliases: ['关云长', '关公', '武圣'], era: '三国', field: '军事', nationality: '中国',
+      systemPrompt: `你现在扮演三国名将关羽。规则：1.绝不说出名字字号 2.说话傲骨铮铮重义轻利 3.武艺超群义薄云天 4.被问身份时回避 5.可提到经历（结义兄弟、千里寻兄、镇守要地）不说具体名称 6.每次2-4句话` },
+    { name: '王阳明', aliases: ['王守仁', '阳明先生'], era: '明朝', field: '哲学', nationality: '中国',
+      systemPrompt: `你现在扮演明代心学大师王阳明。规则：1.绝不说出名字字号 2.说话沉稳睿智知行合一 3.既是哲学家又善用兵 4.被问身份时回避 5.可提到经历（龙场悟道、平定叛乱、讲学传道）不说具体地名 6.每次2-4句话` },
+    { name: '居里夫人', aliases: ['玛丽居里'], era: '20世纪', field: '物理学', nationality: '波兰',
+      systemPrompt: `你现在扮演两次获得诺贝尔奖的居里夫人。规则：1.绝不说出名字 2.说话坚毅执着有科学热情 3.在放射性研究上有开创性贡献 4.被问身份时回避 5.可提到经历（远赴他国求学、与丈夫共同研究、两次获得最高科学荣誉）不说具体名称 6.每次2-4句话` },
+    { name: '庄子', aliases: ['庄周', '南华真人'], era: '战国', field: '哲学', nationality: '中国',
+      systemPrompt: `你现在扮演战国哲学家庄子。规则：1.绝不说出名字字号 2.说话洒脱超然善用寓言 3.追求逍遥自在的境界 4.被问身份时回避 5.可提到经历（宁愿做泥中之龟、拒绝为官、与友人辩论）不说具体名称 6.每次2-4句话` },
+  ]
+};
+
+const ALL_CHARACTERS = [...CHARACTERS.campaign, ...CHARACTERS.challenge];
+
+// ============================================================
+// 状态管理
+// ============================================================
+const STATE = {
+  currentPage: 'home',
+  mode: null,
+  currentLevel: 0,
+  currentCharacter: null,
+  messages: [],
+  turnCount: 0,
+  maxTurns: 10,
+  guessedCorrectly: false,
+  hintUsed: false,
+  hintsRemaining: 3,
+  campaignProgress: JSON.parse(localStorage.getItem('gw_campaign') || '{"unlockedLevel":1,"stars":{}}'),
+  challengeStats: JSON.parse(localStorage.getItem('gw_challenge') || '{"streak":0,"bestStreak":0,"total":0,"correct":0}'),
+  apiConfig: JSON.parse(localStorage.getItem('gw_api') || '{"baseUrl":"https://api.siliconflow.cn/v1","apiKey":"","model":"Qwen/Qwen2.5-7B-Instruct"}'),
+  isLoading: false,
+  showGuessModal: false,
+  showHintModal: false,
+  showSettingsFromGame: false,
+  gallery: JSON.parse(localStorage.getItem('gw_gallery') || '[]'),
+};
+
+function save() {
+  localStorage.setItem('gw_campaign', JSON.stringify(STATE.campaignProgress));
+  localStorage.setItem('gw_challenge', JSON.stringify(STATE.challengeStats));
+  localStorage.setItem('gw_api', JSON.stringify(STATE.apiConfig));
+  localStorage.setItem('gw_gallery', JSON.stringify(STATE.gallery));
+}
+
+// ============================================================
+// AI 通信
+// ============================================================
+async function callAI(msgs) {
+  const { baseUrl, apiKey, model } = STATE.apiConfig;
+  if (!apiKey) return '请先在设置中配置你的 API 密钥。';
+  try {
+    const r = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, messages: msgs, temperature: 0.8, max_tokens: 300, top_p: 0.9 })
+    });
+    if (!r.ok) throw new Error(`接口错误 (${r.status})`);
+    const d = await r.json();
+    return d.choices[0].message.content;
+  } catch (e) { return `请求失败：${e.message}`; }
+}
+
+async function getReply(userMsg) {
+  const c = STATE.currentCharacter;
+  const sys = {
+    role: 'system',
+    content: c.systemPrompt + `\n\n额外强制规则：
+- 用户可能会用各种方式套你的身份，你必须始终保持警惕
+- 不要说出任何能直接搜索到你身份的关键词组合
+- 如果用户猜对了你的身份，不要确认也不要否认，继续保持角色
+- 不要引用自己最广为人知的名言或作品标题
+- 保持角色一致性，不要前后矛盾
+- 回复简洁，每次2-4句话`
+  };
+  const list = [sys];
+  for (const m of STATE.messages) {
+    if (m.role === 'system-info') continue;
+    list.push({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content });
+  }
+  list.push({ role: 'user', content: userMsg });
+  return await callAI(list);
+}
+
+// ============================================================
+// 工具函数
+// ============================================================
+function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+function checkGuess(guess) {
+  const n = guess.trim().toLowerCase().replace(/\s+/g, '');
+  if (!n) return false;
+  const targets = [STATE.currentCharacter.name, ...(STATE.currentCharacter.aliases || [])].map(x => x.toLowerCase().replace(/\s+/g, ''));
+  return targets.some(t => n.includes(t) || t.includes(n));
+}
+
+function calcStars() {
+  if (STATE.turnCount <= 3) return STATE.hintUsed ? 2 : 3;
+  if (STATE.turnCount <= 6) return STATE.hintUsed ? 1 : 2;
+  return 1;
+}
+
+function stars(count) {
+  return [1,2,3].map(i => `<span class="material-icons-round text-lg ${i <= count ? 'text-amber-400' : 'text-warm-200'}"  >star</span>`).join('');
+}
+
+// ============================================================
+// 页面导航
+// ============================================================
+function go(page) {
+  STATE.currentPage = page;
+  STATE.showGuessModal = false;
+  STATE.showHintModal = false;
+  render();
+}
+
+function render() {
+  const el = document.getElementById('app');
+  const pages = { home: pgHome, settings: pgSettings, 'mode-select': pgModeSelect, 'campaign-select': pgCampaignSelect, game: pgGame, result: pgResult, gallery: pgGallery };
+  el.innerHTML = (pages[STATE.currentPage] || pgHome)();
+  // 自动聚焦
+  if (STATE.currentPage === 'game' && !STATE.showGuessModal && !STATE.showHintModal && !STATE.isLoading) {
+    setTimeout(() => { const i = document.getElementById('chat-input'); if (i) i.focus(); }, 80);
+  }
+}
+
+// ============================================================
+// 通用组件
+// ============================================================
+function topBar(title, backPage) {
+  return `<div class="flex items-center gap-3 px-4 pt-5 pb-4">
+    <button onclick="go('${backPage}')" class="w-9 h-9 rounded-full bg-warm-100 flex items-center justify-center hover:bg-warm-200 transition-colors">
+      <span class="material-icons-round text-warm-600 text-xl">arrow_back</span>
+    </button>
+    <h2 class="text-lg font-semibold text-warm-800">${title}</h2>
+  </div>`;
+}
+
+// ============================================================
+// 首页
+// ============================================================
+function pgHome() {
+  return `
+  <div class="min-h-screen flex flex-col items-center justify-center px-6">
+    <div class="text-center animate__animated animate__fadeIn">
+      <div class="w-20 h-20 rounded-2xl bg-brand-500 flex items-center justify-center mx-auto mb-5 shadow-lg">
+        <span class="text-4xl">🎭</span>
+      </div>
+      <h1 class="text-3xl font-bold text-warm-900 mb-1.5">历史迷踪</h1>
+      <p class="text-warm-500 text-sm mb-10">与历史人物对话，猜出他们的身份</p>
+    </div>
+    <div class="flex flex-col gap-3 w-full max-w-xs animate__animated animate__fadeInUp">
+      <button onclick="go('mode-select')"
+        class="w-full py-3.5 bg-brand-500 text-white rounded-xl text-base font-semibold shadow-sm hover:bg-brand-600 transition-colors active:scale-[0.97]">
+        开始游戏
+      </button>
+      <button onclick="go('gallery')"
+        class="w-full py-3 bg-white text-warm-700 rounded-xl text-sm font-medium border border-warm-200 hover:bg-warm-50 transition-colors active:scale-[0.97]">
+        人物图鉴 <span class="text-warm-400 ml-1">${STATE.gallery.length}/${ALL_CHARACTERS.length}</span>
+      </button>
+      <button onclick="go('settings')"
+        class="w-full py-3 bg-white text-warm-700 rounded-xl text-sm font-medium border border-warm-200 hover:bg-warm-50 transition-colors active:scale-[0.97]">
+        接口设置
+      </button>
+    </div>
+    <p class="text-warm-300 text-xs mt-16">基于开源大语言模型驱动</p>
+  </div>`;
+}
+
+// ============================================================
+// 设置
+// ============================================================
+function pgSettings() {
+  const c = STATE.apiConfig;
+  const back = STATE.showSettingsFromGame ? 'game' : 'home';
+  return `
+  <div class="min-h-screen bg-warm-50 pb-8">
+    ${topBar('接口设置', back)}
+    <div class="max-w-lg mx-auto px-4 space-y-4">
+      <div class="bg-white rounded-xl p-5 border border-warm-100 space-y-4">
+        <div>
+          <label class="block text-warm-600 text-xs font-medium mb-1.5">接口地址</label>
+          <input id="cfg-url" type="text" value="${c.baseUrl}" placeholder="https://api.siliconflow.cn/v1"
+            class="w-full px-3 py-2.5 rounded-lg border border-warm-200 focus:border-brand-400 focus:ring-1 focus:ring-brand-100 outline-none text-sm text-warm-800">
+          <p class="text-[11px] text-warm-400 mt-1">兼容所有 OpenAI 格式接口</p>
+        </div>
+        <div>
+          <label class="block text-warm-600 text-xs font-medium mb-1.5">密钥</label>
+          <input id="cfg-key" type="password" value="${c.apiKey}" placeholder="sk-..."
+            class="w-full px-3 py-2.5 rounded-lg border border-warm-200 focus:border-brand-400 focus:ring-1 focus:ring-brand-100 outline-none text-sm text-warm-800">
+        </div>
+        <div>
+          <label class="block text-warm-600 text-xs font-medium mb-1.5">模型</label>
+          <input id="cfg-model" type="text" value="${c.model}" placeholder="Qwen/Qwen2.5-7B-Instruct"
+            class="w-full px-3 py-2.5 rounded-lg border border-warm-200 focus:border-brand-400 focus:ring-1 focus:ring-brand-100 outline-none text-sm text-warm-800">
+        </div>
+        <button onclick="doSaveSettings()"
+          class="w-full py-2.5 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors">
+          保存
+        </button>
+      </div>
+      <div class="bg-white rounded-xl p-4 border border-warm-100">
+        <p class="text-xs font-medium text-warm-600 mb-2">如何获取密钥？</p>
+        <ol class="text-xs text-warm-500 space-y-1 list-decimal list-inside leading-relaxed">
+          <li>访问硅基流动（SiliconFlow）注册账号，新用户有免费额度</li>
+          <li>进入控制台，创建新的 API 密钥</li>
+          <li>将密钥粘贴到上方输入框保存即可</li>
+        </ol>
+      </div>
+    </div>
+  </div>`;
+}
+
+function doSaveSettings() {
+  STATE.apiConfig.baseUrl = document.getElementById('cfg-url').value.trim();
+  STATE.apiConfig.apiKey = document.getElementById('cfg-key').value.trim();
+  STATE.apiConfig.model = document.getElementById('cfg-model').value.trim();
+  save();
+  STATE.showSettingsFromGame ? (STATE.showSettingsFromGame = false, go('game')) : go('home');
+}
+
+// ============================================================
+// 模式选择
+// ============================================================
+function pgModeSelect() {
+  return `
+  <div class="min-h-screen bg-warm-50 pb-8">
+    ${topBar('选择模式', 'home')}
+    <div class="max-w-lg mx-auto px-4 space-y-3">
+      <button onclick="STATE.mode='campaign';go('campaign-select')"
+        class="w-full bg-white rounded-xl p-5 text-left border border-warm-100 hover:border-brand-300 transition-all active:scale-[0.98]">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-brand-50 flex items-center justify-center text-2xl flex-shrink-0">📜</div>
+          <div class="flex-1 min-w-0">
+            <h3 class="text-base font-semibold text-warm-800 mb-0.5">闯关模式</h3>
+            <p class="text-xs text-warm-500 leading-relaxed">从易到难，逐步解锁。不限对话次数，用越少对话猜中得星越多。</p>
+            <div class="flex gap-2 mt-2">
+              <span class="text-[11px] bg-brand-50 text-brand-700 px-2 py-0.5 rounded">共 ${CHARACTERS.campaign.length} 关</span>
+              <span class="text-[11px] bg-warm-100 text-warm-600 px-2 py-0.5 rounded">已解锁 ${STATE.campaignProgress.unlockedLevel} 关</span>
+            </div>
+          </div>
+          <span class="material-icons-round text-warm-300">chevron_right</span>
+        </div>
+      </button>
+      <button onclick="startChallenge()"
+        class="w-full bg-white rounded-xl p-5 text-left border border-warm-100 hover:border-brand-300 transition-all active:scale-[0.98]">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-2xl flex-shrink-0">⚔️</div>
+          <div class="flex-1 min-w-0">
+            <h3 class="text-base font-semibold text-warm-800 mb-0.5">挑战模式</h3>
+            <p class="text-xs text-warm-500 leading-relaxed">随机历史人物，每轮仅 10 次对话机会，考验你的推理能力。</p>
+            <div class="flex gap-2 mt-2">
+              <span class="text-[11px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded">连胜 ${STATE.challengeStats.streak}</span>
+              <span class="text-[11px] bg-warm-100 text-warm-600 px-2 py-0.5 rounded">最佳 ${STATE.challengeStats.bestStreak}</span>
+            </div>
+          </div>
+          <span class="material-icons-round text-warm-300">chevron_right</span>
+        </div>
+      </button>
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// 关卡选择
+// ============================================================
+function pgCampaignSelect() {
+  const lvls = CHARACTERS.campaign;
+  const unlocked = STATE.campaignProgress.unlockedLevel;
+  const st = STATE.campaignProgress.stars;
+  const diffNames = ['','入门','入门','进阶','进阶','进阶','困难','困难','困难','大师','大师'];
+  return `
+  <div class="min-h-screen bg-warm-50 pb-8">
+    ${topBar('选择关卡', 'mode-select')}
+    <div class="max-w-lg mx-auto px-4">
+      <div class="grid grid-cols-2 gap-3">
+        ${lvls.map((l, i) => {
+          const n = i + 1;
+          const locked = n > unlocked;
+          const s = st[n] || 0;
+          const diff = diffNames[n] || '困难';
+          return `
+          <button onclick="${locked ? '' : `startLevel(${n})`}"
+            class="bg-white rounded-xl p-4 text-center border border-warm-100 transition-all ${locked ? 'level-locked' : 'hover:border-brand-300 hover:shadow-sm active:scale-[0.97]'}">
+            <div class="text-2xl mb-1">${locked ? '🔒' : '🎭'}</div>
+            <div class="text-sm font-semibold text-warm-800">第 ${n} 关</div>
+            <div class="text-[11px] text-warm-400 mb-1.5">${diff}</div>
+            ${!locked && s > 0 ? `<div class="flex justify-center gap-0.5">${stars(s)}</div>` : ''}
+            ${locked ? '<div class="text-[11px] text-warm-400">需通过上一关</div>' : (s === 0 ? '<div class="text-[11px] text-warm-400">未通关</div>' : '')}
+          </button>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// 游戏主界面
+// ============================================================
+function pgGame() {
+  const ch = STATE.mode === 'challenge';
+  const rem = STATE.maxTurns - STATE.turnCount;
+  const dis = STATE.isLoading ? 'disabled' : '';
+
+  const msgHtml = STATE.messages.map(m => {
+    if (m.role === 'system-info') return `<div class="flex justify-center my-1.5"><div class="bg-red-50 text-red-500 text-xs px-3 py-1 rounded-full">${esc(m.content)}</div></div>`;
+    if (m.role === 'user') return `<div class="flex justify-end"><div class="max-w-[78%] bg-brand-500 text-white px-3.5 py-2 rounded-2xl rounded-br-sm text-sm leading-relaxed">${esc(m.content)}</div></div>`;
+    return `<div class="flex justify-start"><div class="flex items-end gap-2 max-w-[82%]">
+      <div class="w-7 h-7 rounded-full bg-warm-200 flex items-center justify-center flex-shrink-0 text-sm">🎭</div>
+      <div class="bg-white border border-warm-100 px-3.5 py-2 rounded-2xl rounded-bl-sm text-sm text-warm-700 leading-relaxed">${esc(m.content)}</div>
+    </div></div>`;
+  }).join('');
+
+  const loadingHtml = STATE.isLoading ? `<div class="flex justify-start"><div class="flex items-end gap-2">
+    <div class="w-7 h-7 rounded-full bg-warm-200 flex items-center justify-center flex-shrink-0 text-sm">🎭</div>
+    <div class="bg-white border border-warm-100 px-4 py-2.5 rounded-2xl rounded-bl-sm">
+      <div class="flex gap-1"><div class="w-1.5 h-1.5 bg-warm-400 rounded-full typing-dot"></div><div class="w-1.5 h-1.5 bg-warm-400 rounded-full typing-dot"></div><div class="w-1.5 h-1.5 bg-warm-400 rounded-full typing-dot"></div></div>
+    </div></div></div>` : '';
+
+  return `
+  <div class="h-screen flex flex-col bg-warm-50">
+    <!-- 顶栏 -->
+    <div class="bg-white border-b border-warm-100 px-4 py-2.5 flex items-center justify-between flex-shrink-0">
+      <button onclick="confirmExit()" class="w-8 h-8 rounded-full hover:bg-warm-100 flex items-center justify-center transition-colors">
+        <span class="material-icons-round text-warm-500 text-xl">arrow_back</span>
+      </button>
+      <div class="text-center">
+        <div class="text-sm font-semibold text-warm-800">${ch ? '挑战模式' : `第 ${STATE.currentLevel} 关`}</div>
+        <div class="text-[11px] text-warm-400">${ch ? `剩余 ${rem}/${STATE.maxTurns} 次对话` : `已对话 ${STATE.turnCount} 轮`}</div>
+      </div>
+      <div class="flex items-center gap-1">
+        <button onclick="doHint()" class="w-8 h-8 rounded-full hover:bg-warm-100 flex items-center justify-center transition-colors relative">
+          <span class="material-icons-round text-warm-500 text-xl">lightbulb</span>
+          <span class="absolute -top-0.5 -right-0.5 bg-amber-400 text-white text-[9px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-medium">${STATE.hintsRemaining}</span>
+        </button>
+        <button onclick="STATE.showSettingsFromGame=true;go('settings')" class="w-8 h-8 rounded-full hover:bg-warm-100 flex items-center justify-center transition-colors">
+          <span class="material-icons-round text-warm-400 text-xl">settings</span>
+        </button>
+      </div>
+    </div>
+    ${ch ? `<div class="w-full bg-warm-100 h-1"><div class="h-full bg-brand-400 transition-all duration-500" style="width:${(rem/STATE.maxTurns)*100}%"></div></div>` : ''}
+
+    <!-- 聊天区 -->
+    <div id="chat-area" class="flex-1 overflow-y-auto chat-scroll px-4 py-3 space-y-2.5">
+      <div class="flex justify-center mb-3">
+        <div class="bg-warm-200/60 text-warm-500 text-[11px] px-3 py-1 rounded-full">一位神秘的历史人物出现了，猜猜 TA 是谁？</div>
+      </div>
+      ${msgHtml}${loadingHtml}
+    </div>
+
+    <!-- 输入区 -->
+    <div class="bg-white border-t border-warm-100 px-3 py-2.5 flex-shrink-0">
+      <div class="flex gap-2 max-w-2xl mx-auto">
+        <button onclick="openGuess()" class="flex-shrink-0 bg-amber-50 text-amber-700 border border-amber-200 px-3 py-2 rounded-xl text-sm font-medium hover:bg-amber-100 transition-colors active:scale-95" ${dis}>
+          我要猜
+        </button>
+        <input id="chat-input" type="text" placeholder="向 TA 提问..." ${dis}
+          class="flex-1 px-3 py-2 rounded-xl border border-warm-200 focus:border-brand-400 focus:ring-1 focus:ring-brand-100 outline-none text-sm text-warm-800 bg-warm-50"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}">
+        <button onclick="sendMsg()" class="flex-shrink-0 w-9 h-9 bg-brand-500 text-white rounded-xl flex items-center justify-center hover:bg-brand-600 transition-colors active:scale-95" ${dis}>
+          <span class="material-icons-round text-lg">send</span>
+        </button>
+      </div>
+    </div>
+
+    ${STATE.showGuessModal ? guessModal() : ''}
+    ${STATE.showHintModal ? hintModal() : ''}
+  </div>`;
+}
+
+function guessModal() {
+  return `
+  <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onclick="if(event.target===this){STATE.showGuessModal=false;render();}">
+    <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl animate__animated animate__fadeIn animate__faster">
+      <h3 class="text-base font-semibold text-warm-800 mb-1">你觉得 TA 是谁？</h3>
+      <p class="text-xs text-warm-400 mb-3">输入你猜测的历史人物姓名</p>
+      <input id="guess-input" type="text" placeholder="请输入人物姓名..."
+        class="w-full px-3 py-2.5 rounded-lg border border-warm-200 focus:border-brand-400 focus:ring-1 focus:ring-brand-100 outline-none text-warm-800"
+        onkeydown="if(event.key==='Enter'){doGuess();}">
+      <div class="flex gap-2 mt-4">
+        <button onclick="STATE.showGuessModal=false;render();"
+          class="flex-1 py-2.5 border border-warm-200 text-warm-600 rounded-lg text-sm font-medium hover:bg-warm-50 transition-colors">取消</button>
+        <button onclick="doGuess()"
+          class="flex-1 py-2.5 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors">确认</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function hintModal() {
+  const c = STATE.currentCharacter;
+  return `
+  <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onclick="if(event.target===this){STATE.showHintModal=false;render();}">
+    <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl animate__animated animate__fadeIn animate__faster">
+      <h3 class="text-base font-semibold text-warm-800 mb-4">线索提示</h3>
+      <div class="space-y-2.5">
+        <div class="bg-amber-50 border-l-3 border-amber-400 rounded-r-lg px-3 py-2">
+          <div class="text-[11px] text-amber-600 font-medium">时代</div>
+          <div class="text-sm text-warm-800 font-medium">${c?.era || ''}</div>
+        </div>
+        <div class="bg-amber-50 border-l-3 border-amber-400 rounded-r-lg px-3 py-2">
+          <div class="text-[11px] text-amber-600 font-medium">领域</div>
+          <div class="text-sm text-warm-800 font-medium">${c?.field || ''}</div>
+        </div>
+        <div class="bg-amber-50 border-l-3 border-amber-400 rounded-r-lg px-3 py-2">
+          <div class="text-[11px] text-amber-600 font-medium">国籍</div>
+          <div class="text-sm text-warm-800 font-medium">${c?.nationality || ''}</div>
+        </div>
+      </div>
+      <p class="text-[11px] text-warm-400 mt-3 text-center">使用提示会降低一颗星评价</p>
+      <button onclick="STATE.showHintModal=false;render();"
+        class="w-full mt-3 py-2.5 bg-warm-800 text-white rounded-lg text-sm font-medium hover:bg-warm-700 transition-colors">知道了</button>
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// 结果页
+// ============================================================
+function pgResult() {
+  const ok = STATE.guessedCorrectly;
+  const c = STATE.currentCharacter;
+  const ch = STATE.mode === 'challenge';
+  const s = ok && !ch ? calcStars() : 0;
+  return `
+  <div class="min-h-screen bg-warm-50 flex flex-col items-center justify-center p-5">
+    <div class="bg-white rounded-2xl p-6 max-w-sm w-full border border-warm-100 text-center animate__animated animate__fadeIn">
+      <div class="text-5xl mb-3">${ok ? '🎉' : '😔'}</div>
+      <h2 class="text-xl font-bold ${ok ? 'text-brand-600' : 'text-warm-500'} mb-1">
+        ${ok ? '猜对了！' : (ch && STATE.turnCount >= STATE.maxTurns ? '对话次数用完了' : '猜错了')}
+      </h2>
+
+      <div class="my-5 bg-warm-50 rounded-xl p-4">
+        <p class="text-xs text-warm-400 mb-1">TA 的真实身份</p>
+        <p class="text-xl font-bold text-warm-800">${c.name}</p>
+        <p class="text-xs text-warm-400 mt-0.5">${c.era} · ${c.field}</p>
+      </div>
+
+      ${!ch && ok ? `<div class="flex justify-center gap-0.5 mb-1">${stars(s)}</div><p class="text-xs text-warm-400 mb-5">${STATE.turnCount} 轮对话猜中</p>` : ''}
+
+      ${ch ? `<div class="flex justify-center gap-8 mb-5">
+        <div class="text-center"><div class="text-xl font-bold ${ok ? 'text-brand-600' : 'text-warm-400'}">${STATE.challengeStats.streak}</div><div class="text-[11px] text-warm-400">当前连胜</div></div>
+        <div class="text-center"><div class="text-xl font-bold text-amber-500">${STATE.challengeStats.bestStreak}</div><div class="text-[11px] text-warm-400">最佳连胜</div></div>
+      </div>` : ''}
+
+      <div class="flex flex-col gap-2">
+        ${ch ? `<button onclick="startChallenge()" class="w-full py-2.5 bg-brand-500 text-white rounded-xl text-sm font-medium hover:bg-brand-600 transition-colors">继续挑战</button>` :
+        `${ok && STATE.currentLevel < CHARACTERS.campaign.length ? `<button onclick="startLevel(${STATE.currentLevel + 1})" class="w-full py-2.5 bg-brand-500 text-white rounded-xl text-sm font-medium hover:bg-brand-600 transition-colors">下一关</button>` : ''}
+        <button onclick="go('campaign-select')" class="w-full py-2.5 bg-warm-100 text-warm-700 rounded-xl text-sm font-medium hover:bg-warm-200 transition-colors">关卡列表</button>`}
+        <button onclick="go('home')" class="w-full py-2 text-warm-400 text-sm hover:text-warm-600 transition-colors">返回首页</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// 图鉴
+// ============================================================
+function pgGallery() {
+  return `
+  <div class="min-h-screen bg-warm-50 pb-8">
+    ${topBar('人物图鉴', 'home')}
+    <div class="max-w-lg mx-auto px-4">
+      <p class="text-xs text-warm-400 mb-3">已收集 ${STATE.gallery.length}/${ALL_CHARACTERS.length}</p>
+      <div class="grid grid-cols-3 gap-2.5">
+        ${ALL_CHARACTERS.map(c => {
+          const u = STATE.gallery.includes(c.name);
+          return `<div class="bg-white rounded-xl p-3 text-center border border-warm-100 ${!u ? 'opacity-35' : ''}">
+            <div class="text-2xl mb-0.5">${u ? '🎭' : '❓'}</div>
+            <div class="text-xs font-medium text-warm-700 truncate">${u ? c.name : '???'}</div>
+            <div class="text-[10px] text-warm-400 truncate">${u ? c.era + ' · ' + c.field : '未解锁'}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// 游戏逻辑
+// ============================================================
+function startLevel(n) {
+  STATE.mode = 'campaign';
+  STATE.currentLevel = n;
+  STATE.currentCharacter = CHARACTERS.campaign[n - 1];
+  resetGame();
+  go('game');
+  firstMsg();
+}
+
+function startChallenge() {
+  STATE.mode = 'challenge';
+  STATE.currentCharacter = ALL_CHARACTERS[Math.floor(Math.random() * ALL_CHARACTERS.length)];
+  resetGame();
+  go('game');
+  firstMsg();
+}
+
+function resetGame() {
+  STATE.messages = [];
+  STATE.turnCount = 0;
+  STATE.guessedCorrectly = false;
+  STATE.hintUsed = false;
+  STATE.hintsRemaining = 3;
+  STATE.isLoading = false;
+}
+
+async function firstMsg() {
+  STATE.isLoading = true;
+  render();
+  const txt = await getReply('请用你的身份和语气，向我打个招呼介绍一下你自己（但不要暴露名字和关键身份信息）。让我产生好奇，想要猜出你是谁。');
+  STATE.messages.push({ role: 'assistant', content: txt });
+  STATE.isLoading = false;
+  render();
+  scrollBottom();
+}
+
+async function sendMsg() {
+  const el = document.getElementById('chat-input');
+  const t = el.value.trim();
+  if (!t || STATE.isLoading) return;
+  if (STATE.mode === 'challenge' && STATE.turnCount >= STATE.maxTurns) { endGame(false); return; }
+
+  STATE.messages.push({ role: 'user', content: t });
+  STATE.turnCount++;
+  STATE.isLoading = true;
+  render();
+  scrollBottom();
+
+  const reply = await getReply(t);
+  STATE.messages.push({ role: 'assistant', content: reply });
+  STATE.isLoading = false;
+  render();
+  scrollBottom();
+
+  if (STATE.mode === 'challenge' && STATE.turnCount >= STATE.maxTurns) {
+    setTimeout(() => openGuess(), 1200);
+  }
+}
+
+function openGuess() {
+  STATE.showGuessModal = true;
+  render();
+  setTimeout(() => { const i = document.getElementById('guess-input'); if (i) i.focus(); }, 80);
+}
+
+function doGuess() {
+  const el = document.getElementById('guess-input');
+  const g = el.value.trim();
+  if (!g) return;
+  STATE.showGuessModal = false;
+  if (checkGuess(g)) { endGame(true); }
+  else {
+    STATE.messages.push({ role: 'system-info', content: `"${g}"不对，继续问问看吧` });
+    render(); scrollBottom();
+  }
+}
+
+function doHint() {
+  if (STATE.hintsRemaining <= 0) return;
+  STATE.hintsRemaining--;
+  STATE.hintUsed = true;
+  STATE.showHintModal = true;
+  render();
+}
+
+function endGame(ok) {
+  STATE.guessedCorrectly = ok;
+  if (ok && !STATE.gallery.includes(STATE.currentCharacter.name)) {
+    STATE.gallery.push(STATE.currentCharacter.name);
+  }
+  if (STATE.mode === 'campaign' && ok) {
+    const s = calcStars();
+    const prev = STATE.campaignProgress.stars[STATE.currentLevel] || 0;
+    if (s > prev) STATE.campaignProgress.stars[STATE.currentLevel] = s;
+    if (STATE.currentLevel >= STATE.campaignProgress.unlockedLevel) {
+      STATE.campaignProgress.unlockedLevel = Math.min(STATE.currentLevel + 1, CHARACTERS.campaign.length);
+    }
+  }
+  if (STATE.mode === 'challenge') {
+    STATE.challengeStats.total++;
+    if (ok) { STATE.challengeStats.correct++; STATE.challengeStats.streak++; STATE.challengeStats.bestStreak = Math.max(STATE.challengeStats.streak, STATE.challengeStats.bestStreak); }
+    else { STATE.challengeStats.streak = 0; }
+  }
+  save();
+  go('result');
+}
+
+function confirmExit() {
+  const back = STATE.mode === 'campaign' ? 'campaign-select' : 'mode-select';
+  if (STATE.messages.length === 0 || confirm('确定退出？当前对话不会保存。')) go(back);
+}
+
+function scrollBottom() {
+  setTimeout(() => { const e = document.getElementById('chat-area'); if (e) e.scrollTop = e.scrollHeight; }, 60);
+}
+
+// 启动
+render();
+</script>
+</body>
+</html>
