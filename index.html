@@ -6,7 +6,7 @@
   <title>历史迷踪</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Icons+Round" rel="stylesheet">
   <script>
     tailwind.config = {
       theme: {
@@ -221,18 +221,15 @@ const STATE = {
   hintsRemaining: 3,
   campaignProgress: JSON.parse(localStorage.getItem('gw_campaign') || '{"unlockedLevel":1,"stars":{}}'),
   challengeStats: JSON.parse(localStorage.getItem('gw_challenge') || '{"streak":0,"bestStreak":0,"total":0,"correct":0}'),
-  apiConfig: JSON.parse(localStorage.getItem('gw_api') || '{"baseUrl":"https://api.siliconflow.cn/v1","apiKey":"","model":"Qwen/Qwen2.5-7B-Instruct"}'),
   isLoading: false,
   showGuessModal: false,
   showHintModal: false,
-  showSettingsFromGame: false,
   gallery: JSON.parse(localStorage.getItem('gw_gallery') || '[]'),
 };
 
 function save() {
   localStorage.setItem('gw_campaign', JSON.stringify(STATE.campaignProgress));
   localStorage.setItem('gw_challenge', JSON.stringify(STATE.challengeStats));
-  localStorage.setItem('gw_api', JSON.stringify(STATE.apiConfig));
   localStorage.setItem('gw_gallery', JSON.stringify(STATE.gallery));
 }
 
@@ -240,13 +237,11 @@ function save() {
 // AI 通信
 // ============================================================
 async function callAI(msgs) {
-  const { baseUrl, apiKey, model } = STATE.apiConfig;
-  if (!apiKey) return '请先在设置中配置你的 API 密钥。';
   try {
-    const r = await fetch(`${baseUrl}/chat/completions`, {
+    const r = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages: msgs, temperature: 0.8, max_tokens: 300, top_p: 0.9 })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: msgs })
     });
     if (!r.ok) throw new Error(`接口错误 (${r.status})`);
     const d = await r.json();
@@ -309,7 +304,7 @@ function go(page) {
 
 function render() {
   const el = document.getElementById('app');
-  const pages = { home: pgHome, settings: pgSettings, 'mode-select': pgModeSelect, 'campaign-select': pgCampaignSelect, game: pgGame, result: pgResult, gallery: pgGallery };
+  const pages = { home: pgHome, 'mode-select': pgModeSelect, 'campaign-select': pgCampaignSelect, game: pgGame, result: pgResult, gallery: pgGallery };
   el.innerHTML = (pages[STATE.currentPage] || pgHome)();
   // 自动聚焦
   if (STATE.currentPage === 'game' && !STATE.showGuessModal && !STATE.showHintModal && !STATE.isLoading) {
@@ -351,65 +346,9 @@ function pgHome() {
         class="w-full py-3 bg-white text-warm-700 rounded-xl text-sm font-medium border border-warm-200 hover:bg-warm-50 transition-colors active:scale-[0.97]">
         人物图鉴 <span class="text-warm-400 ml-1">${STATE.gallery.length}/${ALL_CHARACTERS.length}</span>
       </button>
-      <button onclick="go('settings')"
-        class="w-full py-3 bg-white text-warm-700 rounded-xl text-sm font-medium border border-warm-200 hover:bg-warm-50 transition-colors active:scale-[0.97]">
-        接口设置
-      </button>
     </div>
     <p class="text-warm-300 text-xs mt-16">基于开源大语言模型驱动</p>
   </div>`;
-}
-
-// ============================================================
-// 设置
-// ============================================================
-function pgSettings() {
-  const c = STATE.apiConfig;
-  const back = STATE.showSettingsFromGame ? 'game' : 'home';
-  return `
-  <div class="min-h-screen bg-warm-50 pb-8">
-    ${topBar('接口设置', back)}
-    <div class="max-w-lg mx-auto px-4 space-y-4">
-      <div class="bg-white rounded-xl p-5 border border-warm-100 space-y-4">
-        <div>
-          <label class="block text-warm-600 text-xs font-medium mb-1.5">接口地址</label>
-          <input id="cfg-url" type="text" value="${c.baseUrl}" placeholder="https://api.siliconflow.cn/v1"
-            class="w-full px-3 py-2.5 rounded-lg border border-warm-200 focus:border-brand-400 focus:ring-1 focus:ring-brand-100 outline-none text-sm text-warm-800">
-          <p class="text-[11px] text-warm-400 mt-1">兼容所有 OpenAI 格式接口</p>
-        </div>
-        <div>
-          <label class="block text-warm-600 text-xs font-medium mb-1.5">密钥</label>
-          <input id="cfg-key" type="password" value="${c.apiKey}" placeholder="sk-..."
-            class="w-full px-3 py-2.5 rounded-lg border border-warm-200 focus:border-brand-400 focus:ring-1 focus:ring-brand-100 outline-none text-sm text-warm-800">
-        </div>
-        <div>
-          <label class="block text-warm-600 text-xs font-medium mb-1.5">模型</label>
-          <input id="cfg-model" type="text" value="${c.model}" placeholder="Qwen/Qwen2.5-7B-Instruct"
-            class="w-full px-3 py-2.5 rounded-lg border border-warm-200 focus:border-brand-400 focus:ring-1 focus:ring-brand-100 outline-none text-sm text-warm-800">
-        </div>
-        <button onclick="doSaveSettings()"
-          class="w-full py-2.5 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors">
-          保存
-        </button>
-      </div>
-      <div class="bg-white rounded-xl p-4 border border-warm-100">
-        <p class="text-xs font-medium text-warm-600 mb-2">如何获取密钥？</p>
-        <ol class="text-xs text-warm-500 space-y-1 list-decimal list-inside leading-relaxed">
-          <li>访问硅基流动（SiliconFlow）注册账号，新用户有免费额度</li>
-          <li>进入控制台，创建新的 API 密钥</li>
-          <li>将密钥粘贴到上方输入框保存即可</li>
-        </ol>
-      </div>
-    </div>
-  </div>`;
-}
-
-function doSaveSettings() {
-  STATE.apiConfig.baseUrl = document.getElementById('cfg-url').value.trim();
-  STATE.apiConfig.apiKey = document.getElementById('cfg-key').value.trim();
-  STATE.apiConfig.model = document.getElementById('cfg-model').value.trim();
-  save();
-  STATE.showSettingsFromGame ? (STATE.showSettingsFromGame = false, go('game')) : go('home');
 }
 
 // ============================================================
@@ -526,9 +465,6 @@ function pgGame() {
           <span class="material-icons-round text-warm-500 text-xl">lightbulb</span>
           <span class="absolute -top-0.5 -right-0.5 bg-amber-400 text-white text-[9px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-medium">${STATE.hintsRemaining}</span>
         </button>
-        <button onclick="STATE.showSettingsFromGame=true;go('settings')" class="w-8 h-8 rounded-full hover:bg-warm-100 flex items-center justify-center transition-colors">
-          <span class="material-icons-round text-warm-400 text-xl">settings</span>
-        </button>
       </div>
     </div>
     ${ch ? `<div class="w-full bg-warm-100 h-1"><div class="h-full bg-brand-400 transition-all duration-500" style="width:${(rem/STATE.maxTurns)*100}%"></div></div>` : ''}
@@ -551,7 +487,7 @@ function pgGame() {
           class="flex-1 px-3 py-2 rounded-xl border border-warm-200 focus:border-brand-400 focus:ring-1 focus:ring-brand-100 outline-none text-sm text-warm-800 bg-warm-50"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}">
         <button onclick="sendMsg()" class="flex-shrink-0 w-9 h-9 bg-brand-500 text-white rounded-xl flex items-center justify-center hover:bg-brand-600 transition-colors active:scale-95" ${dis}>
-          <span class="material-icons-round text-lg">send</span>
+          <span class="material-icons-round text-lg">arrow_upward</span>
         </button>
       </div>
     </div>
