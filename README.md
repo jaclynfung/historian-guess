@@ -1,4 +1,4 @@
-# 公网链接：https://historian-guess.vercel.app/
+## 公网链接：https://historian-guess.vercel.app/
 # 历史迷踪
 
 一个基于 AI 角色扮演的历史人物猜测游戏。AI 会扮演一位历史人物与你对话，你需要通过提问推理出 TA 的真实身份。
